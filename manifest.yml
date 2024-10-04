@@ -1,6 +1,5 @@
 ---
 applications:
-- name: HelloWorld
+- name: SAP-BTP
   random-route: true
   memory: 256M
-  path: target/HelloWorld.java
