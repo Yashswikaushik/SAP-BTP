@@ -1,0 +1,163 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum CredentialType {
+  OAUTH2
+  API_KEY
+  BEARER_TOKEN
+  BASIC
+}
+
+enum WorkflowStatus {
+  DRAFT
+  ACTIVE
+  PAUSED
+  ARCHIVED
+}
+
+enum WorkflowRunStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELED
+}
+
+enum StepRunStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  SKIPPED
+}
+
+model Tenant {
+  id          String       @id @default(cuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  credentials Credential[]
+  workflows   Workflow[]
+  auditLogs   AuditLog[]
+}
+
+model Credential {
+  id                    String         @id @default(cuid())
+  tenantId              String
+  provider              String
+  type                  CredentialType
+  encryptedAccessToken  String?
+  encryptedRefreshToken String?
+  encryptedApiKey       String?
+  expiresAt             DateTime?
+  metadata              Json?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+  tenant                Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, provider])
+  @@index([provider])
+}
+
+model IntegrationConnection {
+  id        String   @id @default(cuid())
+  tenantId  String
+  provider  String
+  baseUrl   String?
+  config    Json?
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([tenantId, provider])
+}
+
+model Workflow {
+  id          String         @id @default(cuid())
+  tenantId    String
+  name        String
+  status      WorkflowStatus @default(DRAFT)
+  definition  Json
+  version     Int            @default(1)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+  tenant      Tenant         @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  runs        WorkflowRun[]
+
+  @@index([tenantId, status])
+}
+
+model WorkflowRun {
+  id           String            @id @default(cuid())
+  workflowId   String
+  tenantId     String
+  status       WorkflowRunStatus @default(QUEUED)
+  input        Json?
+  output       Json?
+  error        Json?
+  correlationId String
+  idempotencyKey String?
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+  workflow     Workflow          @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  stepRuns     StepRun[]
+
+  @@index([tenantId, status])
+  @@index([correlationId])
+  @@unique([tenantId, workflowId, idempotencyKey])
+}
+
+model StepRun {
+  id            String        @id @default(cuid())
+  workflowRunId String
+  stepId        String
+  status        StepRunStatus @default(PENDING)
+  attempts      Int           @default(0)
+  input         Json?
+  output        Json?
+  error         Json?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+  workflowRun   WorkflowRun   @relation(fields: [workflowRunId], references: [id], onDelete: Cascade)
+
+  @@index([workflowRunId, stepId])
+}
+
+model WebhookEndpoint {
+  id        String   @id @default(cuid())
+  tenantId  String
+  provider  String
+  workflowId String?
+  secretHash String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([tenantId, provider])
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  tenantId      String
+  actor         String?
+  action        String
+  resourceType  String
+  resourceId    String?
+  correlationId String?
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@index([tenantId, createdAt])
+  @@index([correlationId])
+}

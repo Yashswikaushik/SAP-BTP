@@ -1,5 +1,8 @@
----
 applications:
-- name: SAP-BTP
+- name: ai-orchestration-core
   random-route: true
-  memory: 256M
+  memory: 512M
+  docker:
+    image: ai-orchestration-core:latest
+  env:
+    NODE_ENV: production
